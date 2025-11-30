@@ -31,7 +31,7 @@ export async function callChatAPI(
 ): Promise<{ response: string; sessionId?: string }> {
   try {
     const endpoint = isFirstPrompt ? "/v1/chat/initiate" : "/v1/chat/continue"
-    const payload = isFirstPrompt ? { entity_id: entityId } : { session_id: sessionId }
+    const payload = isFirstPrompt ? { entity_id: entityId } : { session_id: sessionId, message: message }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: "POST",
