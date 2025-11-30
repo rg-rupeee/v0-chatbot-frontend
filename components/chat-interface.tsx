@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { ArrowLeft, Send, Settings } from "lucide-react"
 import ChatHistory from "./chat-history"
 import { ValidationLoader } from "./validation-loader"
+import { MarkdownContent } from "./markdown-content"
 import { callChatAPI } from "@/lib/api-client"
 
 interface ChatInterfaceProps {
@@ -50,19 +51,6 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
   useEffect(() => {
     scrollToBottom()
   }, [messages])
-
-  const createNewSession = (initialEntityId: string) => {
-    const sessionId = Date.now().toString()
-    const newSession: ChatSession = {
-      id: sessionId,
-      title: `Validation - ${initialEntityId}`,
-      messages: [],
-      entityId: initialEntityId,
-      createdAt: new Date(),
-    }
-    setSessions((prev) => [newSession, ...prev])
-    setCurrentSessionId(sessionId)
-  }
 
   const handleEntitySubmit = async () => {
     if (entityId.trim()) {
@@ -279,7 +267,11 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
                           : "bg-muted text-foreground rounded-bl-none border border-border"
                       }`}
                     >
-                      <p className="text-sm">{message.content}</p>
+                      {message.role === "assistant" ? (
+                        <MarkdownContent content={message.content} />
+                      ) : (
+                        <p className="text-sm">{message.content}</p>
+                      )}
                       <span className="text-xs opacity-70 mt-1 block">{message.timestamp.toLocaleTimeString()}</span>
                     </div>
                   </div>
