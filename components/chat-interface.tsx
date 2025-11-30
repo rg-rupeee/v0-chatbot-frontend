@@ -28,6 +28,7 @@ interface ChatSession {
   title: string
   messages: Message[]
   entityId?: string
+  sessionId?: string
   createdAt: Date
 }
 
@@ -70,7 +71,7 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
       setValidationStep(0)
 
       try {
-        const response = await callChatAPI(entityId, true, entityId)
+        const { response, sessionId: apiSessionId } = await callChatAPI(entityId, true, entityId)
 
         for (let i = 0; i < 4; i++) {
           setValidationStep(i)
@@ -87,7 +88,7 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
         setSessions((prev) =>
           prev.map((session) => {
             if (session.id === sessionId) {
-              return { ...session, messages: [assistantMessage] }
+              return { ...session, messages: [assistantMessage], sessionId: apiSessionId }
             }
             return session
           }),
@@ -133,7 +134,7 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
     setValidationStep(0)
 
     try {
-      const response = await callChatAPI(input, false, currentSession?.entityId || "")
+      const { response } = await callChatAPI(input, false, currentSession?.entityId || "", currentSession?.sessionId)
 
       for (let i = 0; i < 4; i++) {
         setValidationStep(i)

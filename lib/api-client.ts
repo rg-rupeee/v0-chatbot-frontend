@@ -12,10 +12,26 @@ class ChatAPIError extends Error {
   }
 }
 
-export async function callChatAPI(message: string, isFirstPrompt: boolean, entityId: string): Promise<string> {
+export interface ChatInitiateResponse {
+  session_id: string
+  response: string
+  [key: string]: any
+}
+
+export interface ChatContinueResponse {
+  response: string
+  [key: string]: any
+}
+
+export async function callChatAPI(
+  message: string,
+  isFirstPrompt: boolean,
+  entityId: string,
+  sessionId?: string,
+): Promise<{ response: string; sessionId?: string }> {
   try {
     const endpoint = isFirstPrompt ? "/v1/chat/initiate" : "/v1/chat/continue"
-    const payload = isFirstPrompt ? { entity_id: entityId } : { message, entity_id: entityId }
+    const payload = isFirstPrompt ? { entity_id: entityId } : { session_id: sessionId }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: "POST",
@@ -37,7 +53,12 @@ export async function callChatAPI(message: string, isFirstPrompt: boolean, entit
 
     responseText = processMarkdownContent(responseText)
 
-    return responseText
+    const result: { response: string; sessionId?: string } = { response: responseText }
+    if (isFirstPrompt && data.session_id) {
+      result.sessionId = data.session_id
+    }
+
+    return result
   } catch (error) {
     if (error instanceof ChatAPIError) {
       throw error
