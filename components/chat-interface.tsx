@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft, Send, Settings } from "lucide-react"
 import ChatHistory from "./chat-history"
-import { mockChatAPI } from "@/lib/mock-api"
+import { ValidationLoader } from "./validation-loader"
+import { callChatAPI } from "@/lib/api-client"
 
 interface ChatInterfaceProps {
   option: string
@@ -36,6 +37,7 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
   const [isEntityInputVisible, setIsEntityInputVisible] = useState(true)
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [validationStep, setValidationStep] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const currentSession = sessions.find((s) => s.id === currentSessionId)
@@ -62,16 +64,73 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
     setCurrentSessionId(sessionId)
   }
 
-  const handleEntitySubmit = () => {
+  const handleEntitySubmit = async () => {
     if (entityId.trim()) {
-      createNewSession(entityId)
+      const sessionId = Date.now().toString()
+      const newSession: ChatSession = {
+        id: sessionId,
+        title: `Validation - ${entityId}`,
+        messages: [],
+        entityId: entityId,
+        createdAt: new Date(),
+      }
+      setSessions((prev) => [newSession, ...prev])
+      setCurrentSessionId(sessionId)
       setIsEntityInputVisible(false)
+
+      setIsLoading(true)
+      setValidationStep(0)
+
+      try {
+        const response = await callChatAPI(entityId, true, entityId)
+
+        for (let i = 0; i < 4; i++) {
+          setValidationStep(i)
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        }
+
+        const assistantMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: response,
+          timestamp: new Date(),
+        }
+
+        setSessions((prev) =>
+          prev.map((session) => {
+            if (session.id === sessionId) {
+              return { ...session, messages: [assistantMessage] }
+            }
+            return session
+          }),
+        )
+      } catch (error) {
+        console.error("[v0] Error calling validation API:", error)
+        const errorMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: "Error validating entity. Please try again.",
+          timestamp: new Date(),
+        }
+        setSessions((prev) =>
+          prev.map((session) => {
+            if (session.id === sessionId) {
+              return { ...session, messages: [errorMessage] }
+            }
+            return session
+          }),
+        )
+      } finally {
+        setIsLoading(false)
+        setValidationStep(0)
+      }
+
       setEntityId("")
     }
   }
 
   const handleSendMessage = async () => {
-    if (!input.trim() || !currentSessionId) return
+    if (!input.trim() || !currentSessionId || isLoading) return
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -83,14 +142,15 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
     setMessages((prev) => [...prev, userMessage])
     setInput("")
     setIsLoading(true)
+    setValidationStep(0)
 
     try {
-      // Call mock API
-      const response = await mockChatAPI(
-        input,
-        messages.length === 0, // isFirstPrompt
-        currentSession?.entityId || "",
-      )
+      const response = await callChatAPI(input, false, currentSession?.entityId || "")
+
+      for (let i = 0; i < 4; i++) {
+        setValidationStep(i)
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -101,9 +161,10 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
 
       setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
-      console.error("Error calling API:", error)
+      console.error("[v0] Error calling API:", error)
     } finally {
       setIsLoading(false)
+      setValidationStep(0)
     }
   }
 
@@ -131,9 +192,7 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
 
   return (
     <div className="h-screen flex bg-background">
-      {/* Sidebar */}
       <div className="w-64 border-r border-border bg-card flex flex-col">
-        {/* Header */}
         <div className="p-4 border-b border-border">
           <Button
             variant="ghost"
@@ -149,13 +208,10 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
           </Button>
         </div>
 
-        {/* Chat History */}
         <ChatHistory sessions={sessions} currentSessionId={currentSessionId} onSelectSession={handleSelectSession} />
       </div>
 
-      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Top Bar */}
         <div className="border-b border-border bg-card p-4 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-foreground">Rules Validation</h2>
@@ -174,7 +230,6 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
           </Button>
         </div>
 
-        {/* Chat Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {isEntityInputVisible ? (
             <div className="flex items-center justify-center h-full">
@@ -188,15 +243,16 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
                     placeholder="e.g., entity_12345 or product_001"
                     value={entityId}
                     onChange={(e) => setEntityId(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && handleEntitySubmit()}
+                    onKeyPress={(e) => e.key === "Enter" && !isLoading && handleEntitySubmit()}
+                    disabled={isLoading}
                     className="bg-input border-border"
                   />
                   <Button
                     onClick={handleEntitySubmit}
-                    disabled={!entityId.trim()}
+                    disabled={!entityId.trim() || isLoading}
                     className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                   >
-                    Start Validation
+                    {isLoading ? "Validating..." : "Start Validation"}
                   </Button>
                 </div>
               </Card>
@@ -229,29 +285,12 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
                   </div>
                 ))
               )}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-muted text-foreground px-4 py-3 rounded-lg rounded-bl-none border border-border">
-                    <div className="flex gap-2">
-                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                      <div
-                        className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {isLoading && <ValidationLoader currentStep={validationStep} />}
               <div ref={messagesEndRef} />
             </>
           )}
         </div>
 
-        {/* Input Area */}
         {!isEntityInputVisible && (
           <div className="border-t border-border bg-card p-4">
             <div className="flex gap-3">
@@ -261,12 +300,12 @@ export default function ChatInterface({ option, onBack, onViewSystemPrompt }: Ch
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && !isLoading && handleSendMessage()}
                 disabled={isLoading}
-                className="bg-input border-border"
+                className="bg-input border-border disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <Button
                 onClick={handleSendMessage}
                 disabled={isLoading || !input.trim()}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 px-6"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 px-6 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />
               </Button>
