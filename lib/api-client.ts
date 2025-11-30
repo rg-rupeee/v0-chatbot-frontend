@@ -1,5 +1,3 @@
-import { processMarkdownContent } from "./markdown-utils"
-
 const API_BASE_URL = process.env.NEXT_PUBLIC_CHAT_API_BASE_URL || "http://localhost:3001"
 
 class ChatAPIError extends Error {
@@ -49,9 +47,9 @@ export async function callChatAPI(
     const data = await response.json()
 
     // Handle different response formats
-    let responseText = data.response || data.message || data.text || JSON.stringify(data)
+    const responseText = data.response || data.message || data.text || JSON.stringify(data)
 
-    responseText = processMarkdownContent(responseText)
+    // responseText = processMarkdownContent(responseText)
 
     const result: { response: string; sessionId?: string } = { response: responseText }
     if (isFirstPrompt && data.session_id) {
